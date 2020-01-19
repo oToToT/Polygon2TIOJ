@@ -52,7 +52,7 @@ class Problem:
         testlib = open('testlib.h', 'r')
         testlib_code = testlib.read()
         testlib.close()
-        self.sjcode = re.sub(r'#include[ ]*"testlib.h"', testlib_code, self.sjcode)
+        self.sjcode = re.sub(r'#[ ]*include[ ]*"testlib.h"', testlib_code, self.sjcode)
         
         statement_html_xml = meta.find('statement', {'type': 'text/html'})
         statement_charset = statement_html_xml.get('charset')
