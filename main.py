@@ -1,4 +1,5 @@
 #! /usr/bin/env python3
+import re
 import argparse
 import zipfile
 import tempfile
@@ -51,8 +52,7 @@ class Problem:
         testlib = open('testlib.h', 'r')
         testlib_code = testlib.read()
         testlib.close()
-        self.sjcode = self.sjcode.replace('#include "testlib.h"', testlib_code)
-        self.sjcode = self.sjcode.replace('#include"testlib.h', testlib_code)
+        self.sjcode = re.sub(r'#include[ ]*"testlib.h"', testlib_code, self.sjcode)
         
         statement_html_xml = meta.find('statement', {'type': 'text/html'})
         statement_charset = statement_html_xml.get('charset')
