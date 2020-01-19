@@ -23,6 +23,7 @@ class Problem:
         self.memory_limit = 65536
         self.output_limit = 65536
         self.tests = []
+        self.sjcode = ''
         return
 
     def fromPolygon(self, z):
@@ -36,11 +37,23 @@ class Problem:
         meta_xml = z.open('problem.xml', 'r')
         meta = BeautifulSoup(meta_xml.read(), 'lxml')
         meta_xml.close()
-        
+       
+        self.problem_type = 1
         self.name = meta.find('name').get('value')
         self.time_limit = int(meta.find('time-limit').text)
         self.memory_limit = int(meta.find('memory-limit').text)
 
+        # replace testlib to support TIOJ
+        checker_path = meta.find('checker').find('source').get('path')
+        checker = z.open(checker_path, 'r')
+        self.sjcode = checker.read().decode('ascii')
+        checker.close()
+        testlib = open('testlib.h', 'r')
+        testlib_code = testlib.read()
+        testlib.close()
+        self.sjcode = self.sjcode.replace('#include "testlib.h"', testlib_code)
+        self.sjcode = self.sjcode.replace('#include"testlib.h', testlib_code)
+        
         statement_html_xml = meta.find('statement', {'type': 'text/html'})
         statement_charset = statement_html_xml.get('charset')
         statement_html_path = statement_html_xml.get('path')
@@ -170,6 +183,32 @@ class TIOJ:
             'problem[source]': problem.source
         })
         problem_id = int(urlparse(rel.url).path.split('/')[-1])
+        if problem.problem_type == 0:
+            pass
+        elif problem.problem_type == 1:
+            problem_edit_get_url = urljoin(self.host, '/problems/%d/edit' % problem_id)
+            problem_edit_post_url = urljoin(self.host, '/problems/%d' % problem_id)
+            rel = self.session.get(problem_edit_get_url)
+            soup = BeautifulSoup(rel.text, 'html.parser')
+            inputs = soup.find('form').find_all('input')
+            rel = self.session.post(problem_edit_post_url, data = {
+                inputs[0].attrs['name']: inputs[0].attrs['value'],
+                inputs[1].attrs['name']: inputs[1].attrs['value'],
+                inputs[2].attrs['name']: inputs[2].attrs['value'],
+                'problem[name]': problem.name,
+                'problem[visible_state]': 2,
+                'problem[problem_type]': problem.problem_type,
+                'problem[description]': problem.description,
+                'problem[input]': problem.input,
+                'problem[output]': problem.output,
+                'problem[example_input]': problem.example_input,
+                'problem[example_output]': problem.example_output,
+                'problem[hint]': problem.hint,
+                'problem[source]': problem.source,
+                'problem[sjcode]': problem.sjcode
+            })
+        else:
+            raise NotImplementedError("problem type other than 0, 1 is not supported")
         return problem_id
 
     def upload_tests(self, problem_id, problem):
@@ -218,4 +257,5 @@ if __name__ == '__main__':
     print('Invisible problem %d created.' % problem_id)
     print('Uploading %d tests..' % len(prob.tests))
     tioj.upload_tests(problem_id, prob)
+    print('%d tests uploaded' % len(prob.tests))
     print('Done.')
