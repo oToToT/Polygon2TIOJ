@@ -171,6 +171,50 @@ class TIOJ:
         })
         return '/users/sign_out' in rel.text
 
+    def update_problem(self, problem_id, problem):
+        problem_edit_get_url = urljoin(self.host, '/problems/%d/edit' % problem_id)
+        problem_edit_post_url = urljoin(self.host, '/problems/%d' % problem_id)
+        rel = self.session.get(problem_edit_get_url)
+        soup = BeautifulSoup(rel.text, 'html.parser')
+        inputs = soup.find('form').find_all('input')
+        
+        if problem.problem_type == 0:
+            rel = self.session.post(problem_edit_post_url, data = {
+                inputs[0].attrs['name']: inputs[0].attrs['value'],
+                inputs[1].attrs['name']: inputs[1].attrs['value'],
+                inputs[2].attrs['name']: inputs[2].attrs['value'],
+                'problem[name]': problem.name,
+                'problem[visible_state]': 2,
+                'problem[problem_type]': problem.problem_type,
+                'problem[description]': problem.description,
+                'problem[input]': problem.input,
+                'problem[output]': problem.output,
+                'problem[example_input]': problem.example_input,
+                'problem[example_output]': problem.example_output,
+                'problem[hint]': problem.hint,
+                'problem[source]': problem.source
+            })
+        elif problem.problem_type == 1:
+            rel = self.session.post(problem_edit_post_url, data = {
+                inputs[0].attrs['name']: inputs[0].attrs['value'],
+                inputs[1].attrs['name']: inputs[1].attrs['value'],
+                inputs[2].attrs['name']: inputs[2].attrs['value'],
+                'problem[name]': problem.name,
+                'problem[visible_state]': 2,
+                'problem[problem_type]': problem.problem_type,
+                'problem[description]': problem.description,
+                'problem[input]': problem.input,
+                'problem[output]': problem.output,
+                'problem[example_input]': problem.example_input,
+                'problem[example_output]': problem.example_output,
+                'problem[hint]': problem.hint,
+                'problem[source]': problem.source,
+                'problem[sjcode]': problem.sjcode
+            })
+        else:
+            raise NotImplementedError
+        return
+
     def create_problem(self, problem):
         # create invisible problem
         problem_new_get_url = urljoin(self.host, '/problems/new')
@@ -197,27 +241,7 @@ class TIOJ:
         if problem.problem_type == 0:
             pass
         elif problem.problem_type == 1:
-            problem_edit_get_url = urljoin(self.host, '/problems/%d/edit' % problem_id)
-            problem_edit_post_url = urljoin(self.host, '/problems/%d' % problem_id)
-            rel = self.session.get(problem_edit_get_url)
-            soup = BeautifulSoup(rel.text, 'html.parser')
-            inputs = soup.find('form').find_all('input')
-            rel = self.session.post(problem_edit_post_url, data = {
-                inputs[0].attrs['name']: inputs[0].attrs['value'],
-                inputs[1].attrs['name']: inputs[1].attrs['value'],
-                inputs[2].attrs['name']: inputs[2].attrs['value'],
-                'problem[name]': problem.name,
-                'problem[visible_state]': 2,
-                'problem[problem_type]': problem.problem_type,
-                'problem[description]': problem.description,
-                'problem[input]': problem.input,
-                'problem[output]': problem.output,
-                'problem[example_input]': problem.example_input,
-                'problem[example_output]': problem.example_output,
-                'problem[hint]': problem.hint,
-                'problem[source]': problem.source,
-                'problem[sjcode]': problem.sjcode
-            })
+            self.update_problem(problem_id, problem)
         else:
             raise NotImplementedError("problem type other than 0, 1 is not supported")
         return problem_id
@@ -276,12 +300,11 @@ if __name__ == '__main__':
         print('Login Failed!')
 
     for filename in args.filename:
-        print(filename)
         problem_zip = zipfile.ZipFile(filename, 'r')
         prob = Problem()
         prob.fromPolygon(problem_zip)
         problem_zip.close()
-
+        print('Processing %s..' % prob.name)
         problem_id = tioj.create_problem(prob)
         print('Invisible problem %d created.' % problem_id)
         print('Uploading %d tests..' % len(prob.tests))
