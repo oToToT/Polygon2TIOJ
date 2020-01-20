@@ -75,50 +75,54 @@ class Problem:
 
         # process input
         input_spec = statement.find('div', {'class': 'input-specification'})
-        input_spec.find('div', {'class': 'section-title'}).extract()
-        input_spec.find('p').extract()
-        self.input = input_spec.encode_contents()
-        self.input = self.input.decode(statement_charset)
-        self.input = mathjaxify(self.input)
+        if input_spec:
+            input_spec.find('div', {'class': 'section-title'}).extract()
+            input_spec.find('p').extract()
+            self.input = input_spec.encode_contents()
+            self.input = self.input.decode(statement_charset)
+            self.input = mathjaxify(self.input)
         
         # process output
         output_spec = statement.find('div', {'class': 'output-specification'})
-        output_spec.find('div', {'class': 'section-title'}).extract()
-        output_spec.find('p').extract()
-        self.output = output_spec.encode_contents()
-        self.output = self.output.decode(statement_charset)
-        self.output = mathjaxify(self.output)
+        if output_spec:
+            output_spec.find('div', {'class': 'section-title'}).extract()
+            output_spec.find('p').extract()
+            self.output = output_spec.encode_contents()
+            self.output = self.output.decode(statement_charset)
+            self.output = mathjaxify(self.output)
 
         # process hint
         note = statement.find('div', {'class': 'note'})
-        note.find('div', {'class': 'section-title'}).extract()
-        note.find('p').extract()
-        self.hint = note.encode_contents()
-        self.hint = self.hint.decode(statement_charset)
-        self.hint = mathjaxify(self.hint)
+        if note:
+            note.find('div', {'class': 'section-title'}).extract()
+            note.find('p').extract()
+            self.hint = note.encode_contents()
+            self.hint = self.hint.decode(statement_charset)
+            self.hint = mathjaxify(self.hint)
 
         # process sample_input, sample_output
         sample_tests = statement.find('div', {'class': 'sample-tests'})
-        example_inputs = statement.find_all('div', {'class': 'input'})
-        example_outputs = statement.find_all('div', {'class': 'output'})
-        if len(example_inputs) == 1:
-            self.example_input = example_inputs[0].find('pre', {'class': 'content'}).text
-        else:
-            cnt = 1
-            for ex in example_inputs:
-                self.example_input += 'Sample Input #%d\n' % cnt
-                self.example_input += ex.find('pre', {'class': 'content'}).text + '\n\n'
-                cnt += 1
-        self.example_input = self.example_input.strip()
-        if len(example_outputs) == 1:
-            self.example_output = example_outputs[0].find('pre', {'class': 'content'}).text
-        else:
-            cnt = 1
-            for ex in example_outputs:
-                self.example_output += 'Sample Output #%d\n' % cnt
-                self.example_output += ex.find('pre', {'class': 'content'}).text + '\n\n'
-                cnt += 1
-        self.example_output = self.example_output.strip()
+        if sample_tests:
+            example_inputs = statement.find_all('div', {'class': 'input'})
+            example_outputs = statement.find_all('div', {'class': 'output'})
+            if len(example_inputs) == 1:
+                self.example_input = example_inputs[0].find('pre', {'class': 'content'}).text
+            else:
+                cnt = 1
+                for ex in example_inputs:
+                    self.example_input += 'Sample Input #%d\n' % cnt
+                    self.example_input += ex.find('pre', {'class': 'content'}).text + '\n\n'
+                    cnt += 1
+            self.example_input = self.example_input.strip()
+            if len(example_outputs) == 1:
+                self.example_output = example_outputs[0].find('pre', {'class': 'content'}).text
+            else:
+                cnt = 1
+                for ex in example_outputs:
+                    self.example_output += 'Sample Output #%d\n' % cnt
+                    self.example_output += ex.find('pre', {'class': 'content'}).text + '\n\n'
+                    cnt += 1
+            self.example_output = self.example_output.strip()
         
         # process tests
         test_count = int(meta.find('test-count').text)
@@ -258,15 +262,10 @@ class TIOJ:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('filename', type=str, help='polygon problem zip')
+    parser.add_argument('filename', type=str, nargs='+', help='polygon problem zip')
     parser.add_argument('--url', type=str, default='https://tioj.ck.tp.edu.tw/', help='TIOJ url')
     args = parser.parse_args()
-
-    problem_zip = zipfile.ZipFile(args.filename, 'r')
-    prob = Problem()
-    prob.fromPolygon(problem_zip)
-    problem_zip.close()
-
+    
     tioj = TIOJ(args.url)
     while True:
         username = input('Username: ')
@@ -275,9 +274,17 @@ if __name__ == '__main__':
             print('Login OK.')
             break
         print('Login Failed!')
-    problem_id = tioj.create_problem(prob)
-    print('Invisible problem %d created.' % problem_id)
-    print('Uploading %d tests..' % len(prob.tests))
-    tioj.upload_tests(problem_id, prob)
-    print('%d tests uploaded' % len(prob.tests))
-    print('Done.')
+
+    for filename in args.filename:
+        print(filename)
+        problem_zip = zipfile.ZipFile(filename, 'r')
+        prob = Problem()
+        prob.fromPolygon(problem_zip)
+        problem_zip.close()
+
+        problem_id = tioj.create_problem(prob)
+        print('Invisible problem %d created.' % problem_id)
+        print('Uploading %d tests..' % len(prob.tests))
+        tioj.upload_tests(problem_id, prob)
+        print('%d tests uploaded' % len(prob.tests))
+        print('Done.')
