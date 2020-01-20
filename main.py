@@ -211,9 +211,24 @@ class TIOJ:
             raise NotImplementedError("problem type other than 0, 1 is not supported")
         return problem_id
 
-    def upload_tests(self, problem_id, problem):
+    def upload_tests(self, problem_id, problem, remove_all = True):
         upload_test_get_url = urljoin(self.host, '/problems/%d/testdata/new' % problem_id)
         upload_test_post_url = urljoin(self.host, '/problems/%d/testdata' % problem_id)
+
+        if remove_all:
+            while True:
+                rel = self.session.get(upload_test_post_url)
+                soup = BeautifulSoup(rel.text, 'html.parser')
+                csrf = soup.find('meta', {'name': 'csrf-token'}).get('content')
+                tbody = soup.find('table').find('tbody')
+                tds = tbody.find_all('td')
+                if len(tds) == 0:
+                    break
+                delete_url = urljoin(self.host, tds[6].find_all('a')[1].get('href'))
+                self.session.post(delete_url, data = {
+                    '_method': 'delete',
+                    'authenticity_token': csrf
+                })
 
         for inp, out in problem.tests:
             rel = self.session.get(upload_test_get_url)
