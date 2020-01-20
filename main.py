@@ -52,7 +52,14 @@ class Problem:
         testlib = open('testlib.h', 'r')
         testlib_code = testlib.read()
         testlib.close()
-        self.sjcode = re.sub(r'#[ ]*include[ ]*"testlib.h"', testlib_code, self.sjcode)
+        sj_list = re.split(r'#[ ]*include[ ]*"testlib.h"', self.sjcode)
+        if len(sj_list) == 1:
+            pass
+        elif len(sj_list) == 2:
+            sj_list.insert(0, testlib_code)
+        else:
+            raise NotImplementedError('Parse Filed!!!')
+        self.sjcode = ''.join(sj_list)
         
         statement_html_xml = meta.find('statement', {'type': 'text/html'})
         statement_charset = statement_html_xml.get('charset')
