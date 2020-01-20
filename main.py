@@ -258,8 +258,8 @@ class TIOJ:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('filename', type=str)
-    parser.add_argument('--url', type=str, default='https://tioji.ck.tp.edu.tw/')
+    parser.add_argument('filename', type=str, help='polygon problem zip')
+    parser.add_argument('--url', type=str, default='https://tioj.ck.tp.edu.tw/', help='TIOJ url')
     args = parser.parse_args()
 
     problem_zip = zipfile.ZipFile(args.filename, 'r')
