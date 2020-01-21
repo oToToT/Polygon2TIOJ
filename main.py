@@ -250,6 +250,7 @@ class TIOJ:
         upload_test_get_url = urljoin(self.host, '/problems/%d/testdata/new' % problem_id)
         upload_test_post_url = urljoin(self.host, '/problems/%d/testdata' % problem_id)
         
+        cnt = 0
         while True:
             rel = self.session.get(upload_test_post_url)
             soup = BeautifulSoup(rel.text, 'html.parser')
@@ -263,7 +264,8 @@ class TIOJ:
                 '_method': 'delete',
                 'authenticity_token': csrf
             })
-        return
+            cnt += 1
+        return cnt
 
     def upload_tests(self, problem_id, problem, remove_all = True):
         upload_test_get_url = urljoin(self.host, '/problems/%d/testdata/new' % problem_id)
@@ -321,8 +323,9 @@ if __name__ == '__main__':
         print('Login Failed!')
 
     if args.remove_tests:
-        for filename in args.filnema:
-            tioj.remove_tests(int(filename))
+        for filename in args.filename:
+            cnt = tioj.remove_tests(int(filename))
+            print('successfully removed %d problems.' % cnt)
     elif args.update:
         for filename, problem_id in [args.filename]:
             problem_id = int(problem_id)
