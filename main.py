@@ -42,7 +42,7 @@ class Problem:
         self.problem_type = 1
         self.name = meta.find('name').get('value')
         self.time_limit = int(meta.find('time-limit').text)
-        self.memory_limit = int(meta.find('memory-limit').text)
+        self.memory_limit = int(meta.find('memory-limit').text) // 1024
 
         # replace testlib to support TIOJ
         checker_path = meta.find('checker').find('source').get('path')
@@ -246,6 +246,25 @@ class TIOJ:
             raise NotImplementedError("problem type other than 0, 1 is not supported")
         return problem_id
 
+    def remove_tests(self, problem_id):
+        upload_test_get_url = urljoin(self.host, '/problems/%d/testdata/new' % problem_id)
+        upload_test_post_url = urljoin(self.host, '/problems/%d/testdata' % problem_id)
+        
+        while True:
+            rel = self.session.get(upload_test_post_url)
+            soup = BeautifulSoup(rel.text, 'html.parser')
+            csrf = soup.find('meta', {'name': 'csrf-token'}).get('content')
+            tbody = soup.find('table').find('tbody')
+            tds = tbody.find_all('td')
+            if len(tds) == 0:
+                break
+            delete_url = urljoin(self.host, tds[6].find_all('a')[1].get('href'))
+            self.session.post(delete_url, data = {
+                '_method': 'delete',
+                'authenticity_token': csrf
+            })
+        return
+
     def upload_tests(self, problem_id, problem, remove_all = True):
         upload_test_get_url = urljoin(self.host, '/problems/%d/testdata/new' % problem_id)
         upload_test_post_url = urljoin(self.host, '/problems/%d/testdata' % problem_id)
@@ -287,6 +306,8 @@ class TIOJ:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('filename', type=str, nargs='+', help='polygon problem zip')
+    parser.add_argument('--update', action='store_true', help='only update package')
+    parser.add_argument('--remove_tests', action='store_true', help='remove tests')
     parser.add_argument('--url', type=str, default='https://tioj.ck.tp.edu.tw/', help='TIOJ url')
     args = parser.parse_args()
     
@@ -299,15 +320,33 @@ if __name__ == '__main__':
             break
         print('Login Failed!')
 
-    for filename in args.filename:
-        problem_zip = zipfile.ZipFile(filename, 'r')
-        prob = Problem()
-        prob.fromPolygon(problem_zip)
-        problem_zip.close()
-        print('Processing %s..' % prob.name)
-        problem_id = tioj.create_problem(prob)
-        print('Invisible problem %d created.' % problem_id)
-        print('Uploading %d tests..' % len(prob.tests))
-        tioj.upload_tests(problem_id, prob)
-        print('%d tests uploaded' % len(prob.tests))
-        print('Done.')
+    if args.remove_tests:
+        for filename in args.filnema:
+            tioj.remove_tests(int(filename))
+    elif args.update:
+        for filename, problem_id in [args.filename]:
+            problem_id = int(problem_id)
+            problem_zip = zipfile.ZipFile(filename, 'r')
+            prob = Problem()
+            prob.fromPolygon(problem_zip)
+            problem_zip.close()
+            print('Processing %s..' % prob.name)
+            tioj.update_problem(problem_id, prob)
+            print('Invisible problem %d created.' % problem_id)
+            print('Uploading %d tests..' % len(prob.tests))
+            tioj.upload_tests(problem_id, prob)
+            print('%d tests uploaded' % len(prob.tests))
+            print('Done.')
+    else:
+        for filename in args.filename:
+            problem_zip = zipfile.ZipFile(filename, 'r')
+            prob = Problem()
+            prob.fromPolygon(problem_zip)
+            problem_zip.close()
+            print('Processing %s..' % prob.name)
+            problem_id = tioj.create_problem(prob)
+            print('Invisible problem %d created.' % problem_id)
+            print('Uploading %d tests..' % len(prob.tests))
+            tioj.upload_tests(problem_id, prob)
+            print('%d tests uploaded' % len(prob.tests))
+            print('Done.')
