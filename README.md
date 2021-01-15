@@ -25,3 +25,7 @@
 ## Special Thanks ##
 
 Thanks @WillyPillow for an easy tool to download contest packages from Polygon
+
+## TODO ##
+
+- [ ] check is user admin
