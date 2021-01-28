@@ -1,3 +1,4 @@
+// Modified Testlib: L2649,4048,4137 changed to match TIOJ special judge
 /* 
  * It is strictly recommended to include "testlib.h" before any other include 
  * in your code. In this case testlib overrides compiler specific "random()".
@@ -3984,7 +3985,6 @@ static void __testlib_ensuresPreconditions() {
 }
 
 void registerGen(int argc, char *argv[], int randomGeneratorVersion) {
-    std::swap(argv[1], argv[2]);
     if (randomGeneratorVersion < 0 || randomGeneratorVersion > 1)
         quitf(_fail, "Random generator version is expected to be 0 or 1.");
     random_t::version = randomGeneratorVersion;
@@ -4134,6 +4134,7 @@ void feature(const std::string &feature) {
 }
 
 void registerTestlibCmd(int argc, char *argv[]) {
+    std::swap(argv[1], argv[2]);
     __testlib_ensuresPreconditions();
 
     testlibMode = _checker;
