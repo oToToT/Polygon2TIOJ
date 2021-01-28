@@ -1,4 +1,3 @@
-// Modified Testlib: L2481,3966,3980 changed to match TIOJ special judge
 /* 
  * It is strictly recommended to include "testlib.h" before any other include 
  * in your code. In this case testlib overrides compiler specific "random()".
@@ -26,7 +25,7 @@
  * Copyright (c) 2005-2020
  */
 
-#define VERSION "0.9.27-SNAPSHOT"
+#define VERSION "0.9.34-SNAPSHOT"
 
 /* 
  * Mike Mirzayanov
@@ -64,6 +63,13 @@
  */
 
 const char *latestFeatures[] = {
+        "Fixed hypothetical UB in stringToDouble and stringToStrictDouble",
+        "rnd.partition(size, sum[, min_part=0]) returns random (unsorted) partition which is a representation of the given `sum` as a sum of `size` positive integers (or >=min_part if specified)",
+        "rnd.distinct(size, n) and rnd.distinct(size, from, to)",
+        "opt<bool>(\"some_missing_key\") returns false now",
+        "has_opt(key)",
+        "Abort validator on validator.testset()/validator.group() if registered without using command line",
+        "Print integer range violations in a human readable way like `violates the range [1, 10^9]`",
         "Opts supported: use them like n = opt<int>(\"n\"), in a command line you can use an exponential notation",
         "Reformatted",
         "Use setTestCase(i) or unsetTestCase() to support test cases (you can use it in any type of program: generator, interactor, validator or checker)",
@@ -958,22 +964,125 @@ public:
         return *(begin + wnext(size, type));
     }
 
+    /* Returns random permutation of the given size (values are between `first` and `first`+size-1)*/
     template<typename T, typename E>
     std::vector<E> perm(T size, E first) {
         if (size <= 0)
             __testlib_fail("random_t::perm(T size, E first = 0): size must be positive");
         std::vector<E> p(size);
+        E current = first;
         for (T i = 0; i < size; i++)
-            p[i] = first + i;
+            p[i] = current++;
         if (size > 1)
             for (T i = 1; i < size; i++)
                 std::swap(p[i], p[next(i + 1)]);
         return p;
     }
 
+    /* Returns random permutation of the given size (values are between 0 and size-1)*/
     template<typename T>
     std::vector<T> perm(T size) {
         return perm(size, T(0));
+    }
+    
+    /* Returns `size` unordered (unsorted) distinct numbers between `from` and `to`. */
+    template<typename T>
+    std::vector<T> distinct(int size, T from, T to) {
+        if (from > to)
+            __testlib_fail("random_t::distinct expected from <= to");
+
+        if (size < 0)
+            __testlib_fail("random_t::distinct expected size >= 0");
+
+        uint64_t n = to - from + 1;
+        if (uint64_t(size) > n)
+            __testlib_fail("random_t::distinct expected size <= to - from + 1");
+
+        std::vector<T> result;
+        if (size == 0)
+            return result;
+
+        double expected = 0.0;
+        for (int i = 1; i <= size; i++)
+            expected += double(n) / double(n - i + 1);
+        
+        if (expected < double(n)) {
+            std::set<T> vals;
+            while (int(vals.size()) < size)
+                vals.insert(T(next(from, to)));
+            result.insert(result.end(), vals.begin(), vals.end());
+        } else {
+            if (n > 1000000000)
+                __testlib_fail("random_t::distinct here expected to - from + 1 <= 1000000000");
+            std::vector<T> p(perm(int(n), from));
+            result.insert(result.end(), p.begin(), p.begin() + size);
+        }
+
+        return result;
+    }
+
+    /* Returns `size` unordered (unsorted) distinct numbers between `0` and `upper`-1. */
+    template<typename T>
+    std::vector<T> distinct(int size, T upper) {
+        if (size < 0)
+            __testlib_fail("random_t::distinct expected size >= 0");
+        if (size == 0)
+            return std::vector<T>();
+        
+        if (upper <= 0)
+            __testlib_fail("random_t::distinct expected upper > 0");
+        if (size > upper)
+            __testlib_fail("random_t::distinct expected size <= upper");
+            
+        return distinct(size, T(0), upper - 1);
+    }
+
+    /* Returns random (unsorted) partition which is a representation of sum as a sum of integers not less than min_part. */
+    template<typename T>
+    std::vector<T> partition(int size, T sum, T min_part) {
+        if (size < 0)
+            __testlib_fail("random_t::partition: size < 0");
+        if (size == 0 && sum != 0)
+            __testlib_fail("random_t::partition: size == 0 && sum != 0");
+        if (min_part * size > sum)
+            __testlib_fail("random_t::partition: min_part * size > sum");
+
+        T sum_ = sum;
+        sum -= min_part * size;
+
+        std::vector<T> septums(size);
+        std::vector<T> d = distinct(size - 1, T(1), T(sum + size - 1));
+        for (int i = 0; i + 1 < size; i++)
+            septums[i + 1] = d[i];
+        sort(septums.begin(), septums.end());
+
+        std::vector<T> result(size);
+        for (int i = 0; i + 1 < size; i++)
+            result[i] = septums[i + 1] - septums[i] - 1;
+        result[size - 1] = sum + size - 1 - septums.back();
+
+        for (std::size_t i = 0; i < result.size(); i++)
+            result[i] += min_part;
+        
+        T result_sum = 0;
+        for (std::size_t i = 0; i < result.size(); i++)
+            result_sum += result[i];
+        if (result_sum != sum_)
+            __testlib_fail("random_t::partition: partition sum is expeced to be the given sum");
+        
+        if (*std::min_element(result.begin(), result.end()) < min_part)
+            __testlib_fail("random_t::partition: partition min is expeced to be to less than the given min_part");
+        
+        if (int(result.size()) != size || result.size() != (size_t) size)
+            __testlib_fail("random_t::partition: partition size is expected to be equal to the given size");
+        
+        return result;
+    }
+
+    /* Returns random (unsorted) partition which is a representation of sum as a sum of positive integers. */
+    template<typename T>
+    std::vector<T> partition(int size, T sum) {
+        return partition(size, sum, T(1));
     }
 };
 
@@ -1157,6 +1266,8 @@ static std::vector<char> __pattern_scanCharSet(const std::string &s, size_t &pos
     if (__pattern_isCommandChar(s, pos, '[')) {
         pos++;
         bool negative = __pattern_isCommandChar(s, pos, '^');
+        if (negative)
+            pos++;
 
         char prev = 0;
 
@@ -1662,7 +1773,6 @@ struct InStream {
     bool stdfile;
     bool strict;
 
-    int wordReserveSize;
     std::string _tmpReadToken;
 
     int readManyIteration;
@@ -2041,6 +2151,7 @@ const double ValidatorBoundsHit::EPS = 1E-12;
 
 class Validator {
 private:
+    bool _initialized;
     std::string _testset;
     std::string _group;
     std::string _testOverviewLogFileName;
@@ -2063,14 +2174,22 @@ private:
     }
 
 public:
-    Validator() : _testset("tests"), _group() {
+    Validator() : _initialized(false), _testset("tests"), _group() {
+    }
+
+    void initialize() {
+        _initialized = true;
     }
 
     std::string testset() const {
+        if (!_initialized)
+            __testlib_fail("Validator should be initialized with registerValidation(argc, argv) instead of registerValidation() to support validator.testset()");
         return _testset;
     }
 
     std::string group() const {
+        if (!_initialized)
+            __testlib_fail("Validator should be initialized with registerValidation(argc, argv) instead of registerValidation() to support validator.group()");
         return _group;
     }
 
@@ -2237,6 +2356,48 @@ static std::string vtos(const T &t) {
     return vtos(t, std::is_integral<T>());
 }
 
+/* signed case. */
+template<typename T>
+static std::string toHumanReadableString(const T &n, std::false_type) {
+    if (n == 0)
+        return vtos(n);
+    int trailingZeroCount = 0;
+    T n_ = n;
+    while (n_ % 10 == 0)
+        n_ /= 10, trailingZeroCount++;
+    if (trailingZeroCount >= 7) {
+        if (n_ == 1)
+            return "10^" + vtos(trailingZeroCount);
+        else if (n_ == -1)
+            return "-10^" + vtos(trailingZeroCount);
+        else
+            return vtos(n_) + "*10^" + vtos(trailingZeroCount);
+    } else
+        return vtos(n);
+}
+
+/* unsigned case. */
+template<typename T>
+static std::string toHumanReadableString(const T &n, std::true_type) {
+    if (n == 0)
+        return vtos(n);
+    int trailingZeroCount = 0;
+    T n_ = n;
+    while (n_ % 10 == 0)
+        n_ /= 10, trailingZeroCount++;
+    if (trailingZeroCount >= 7) {
+        if (n_ == 1)
+            return "10^" + vtos(trailingZeroCount);
+        else
+            return vtos(n_) + "*10^" + vtos(trailingZeroCount);
+    } else
+        return vtos(n);
+}
+
+template<typename T>
+static std::string toHumanReadableString(const T &n) {
+    return toHumanReadableString(n, std::is_unsigned<T>());
+}
 #else
 template<typename T>
 static std::string vtos(const T& t)
@@ -2249,6 +2410,11 @@ static std::string vtos(const T& t)
     ss >> s;
     return s;
 }
+
+template<typename T>
+static std::string toHumanReadableString(const T &n) {
+    return vtos(n);
+}
 #endif
 
 template<typename T>
@@ -2259,11 +2425,11 @@ static std::string toString(const T &t) {
 InStream::InStream() {
     reader = NULL;
     lastLine = -1;
+    opened = false;
     name = "";
     mode = _input;
     strict = false;
     stdfile = false;
-    wordReserveSize = 4;
     readManyIteration = NO_INDEX;
     maxFileSize = 128 * 1024 * 1024; // 128MB.
     maxTokenLength = 32 * 1024 * 1024; // 32MB.
@@ -2275,6 +2441,7 @@ InStream::InStream(const InStream &baseStream, std::string content) {
     lastLine = -1;
     opened = true;
     strict = baseStream.strict;
+    stdfile = false;
     mode = baseStream.mode;
     name = "based on " + baseStream.name;
     readManyIteration = NO_INDEX;
@@ -3002,6 +3169,7 @@ static inline double stringToDouble(InStream &in, const char *buffer) {
         in.quit(_pe, ("Expected double, but \"" + __testlib_part(buffer) + "\" found").c_str());
 
     char *suffix = new char[length + 1];
+    std::memset(suffix, 0, length + 1);
     int scanned = std::sscanf(buffer, "%lf%s", &retval, suffix);
     bool empty = strlen(suffix) == 0;
     delete[] suffix;
@@ -3071,6 +3239,7 @@ stringToStrictDouble(InStream &in, const char *buffer, int minAfterPointDigitCou
         in.quit(_pe, ("Expected strict double, but \"" + __testlib_part(buffer) + "\" found").c_str());
 
     char *suffix = new char[length + 1];
+    std::memset(suffix, 0, length + 1);
     int scanned = std::sscanf(buffer, "%lf%s", &retval, suffix);
     bool empty = strlen(suffix) == 0;
     delete[] suffix;
@@ -3101,7 +3270,7 @@ static inline long long stringToLongLong(InStream &in, const char *buffer) {
     long long retval = 0LL;
 
     int zeroes = 0;
-    int processingZeroes = true;
+    bool processingZeroes = true;
 
     for (int i = (minus ? 1 : 0); i < int(length); i++) {
         if (buffer[i] == '0' && processingZeroes)
@@ -3149,7 +3318,7 @@ static inline unsigned long long stringToUnsignedLongLong(InStream &in, const ch
     if (length < 19)
         return retval;
 
-    if (length == 20 && strcmp(buffer, "18446744073709551615") == 1)
+    if (length == 20 && strcmp(buffer, "18446744073709551615") > 0)
         in.quit(_pe, ("Expected unsigned int64, but \"" + __testlib_part(buffer) + "\" found").c_str());
 
     if (equals(retval, buffer))
@@ -3195,19 +3364,19 @@ long long InStream::readLong(long long minv, long long maxv, const std::string &
     if (result < minv || result > maxv) {
         if (readManyIteration == NO_INDEX) {
             if (variableName.empty())
-                quit(_wa, ("Integer " + vtos(result) + " violates the range [" + vtos(minv) + ", " + vtos(maxv) +
+                quit(_wa, ("Integer " + vtos(result) + " violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) +
                            "]").c_str());
             else
                 quit(_wa, ("Integer parameter [name=" + std::string(variableName) + "] equals to " + vtos(result) +
-                           ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                           ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
         } else {
             if (variableName.empty())
                 quit(_wa, ("Integer element [index=" + vtos(readManyIteration) + "] equals to " + vtos(result) +
-                           ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                           ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
             else
                 quit(_wa,
                      ("Integer element " + std::string(variableName) + "[" + vtos(readManyIteration) + "] equals to " +
-                      vtos(result) + ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                      vtos(result) + ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
         }
     }
 
@@ -3234,20 +3403,20 @@ InStream::readUnsignedLong(unsigned long long minv, unsigned long long maxv, con
         if (readManyIteration == NO_INDEX) {
             if (variableName.empty())
                 quit(_wa,
-                     ("Unsigned integer " + vtos(result) + " violates the range [" + vtos(minv) + ", " + vtos(maxv) +
+                     ("Unsigned integer " + vtos(result) + " violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) +
                       "]").c_str());
             else
                 quit(_wa,
                      ("Unsigned integer parameter [name=" + std::string(variableName) + "] equals to " + vtos(result) +
-                      ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                      ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
         } else {
             if (variableName.empty())
                 quit(_wa,
                      ("Unsigned integer element [index=" + vtos(readManyIteration) + "] equals to " + vtos(result) +
-                      ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                      ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
             else
                 quit(_wa, ("Unsigned integer element " + std::string(variableName) + "[" + vtos(readManyIteration) +
-                           "] equals to " + vtos(result) + ", violates the range [" + vtos(minv) + ", " + vtos(maxv) +
+                           "] equals to " + vtos(result) + ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) +
                            "]").c_str());
         }
     }
@@ -3282,19 +3451,19 @@ int InStream::readInt(int minv, int maxv, const std::string &variableName) {
     if (result < minv || result > maxv) {
         if (readManyIteration == NO_INDEX) {
             if (variableName.empty())
-                quit(_wa, ("Integer " + vtos(result) + " violates the range [" + vtos(minv) + ", " + vtos(maxv) +
+                quit(_wa, ("Integer " + vtos(result) + " violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) +
                            "]").c_str());
             else
                 quit(_wa, ("Integer parameter [name=" + std::string(variableName) + "] equals to " + vtos(result) +
-                           ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                           ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
         } else {
             if (variableName.empty())
                 quit(_wa, ("Integer element [index=" + vtos(readManyIteration) + "] equals to " + vtos(result) +
-                           ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                           ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
             else
                 quit(_wa,
                      ("Integer element " + std::string(variableName) + "[" + vtos(readManyIteration) + "] equals to " +
-                      vtos(result) + ", violates the range [" + vtos(minv) + ", " + vtos(maxv) + "]").c_str());
+                      vtos(result) + ", violates the range [" + toHumanReadableString(minv) + ", " + toHumanReadableString(maxv) + "]").c_str());
         }
     }
 
@@ -3815,6 +3984,7 @@ static void __testlib_ensuresPreconditions() {
 }
 
 void registerGen(int argc, char *argv[], int randomGeneratorVersion) {
+    std::swap(argv[1], argv[2]);
     if (randomGeneratorVersion < 0 || randomGeneratorVersion > 1)
         quitf(_fail, "Random generator version is expected to be 0 or 1.");
     random_t::version = randomGeneratorVersion;
@@ -3875,7 +4045,7 @@ void registerInteraction(int argc, char *argv[]) {
                     std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") +
                     "\nUse \"--help\" to get help information");
     }
-
+    argc = 4;
     if (argc <= 4) {
         resultName = "";
         appesMode = false;
@@ -3924,6 +4094,7 @@ void registerValidation() {
 
 void registerValidation(int argc, char *argv[]) {
     registerValidation();
+    validator.initialize();
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp("--testset", argv[i])) {
@@ -3963,7 +4134,6 @@ void feature(const std::string &feature) {
 }
 
 void registerTestlibCmd(int argc, char *argv[]) {
-    std::swap(argv[1], argv[2]); // TIOJ format
     __testlib_ensuresPreconditions();
 
     testlibMode = _checker;
@@ -3972,12 +4142,12 @@ void registerTestlibCmd(int argc, char *argv[]) {
     if (argc > 1 && !strcmp("--help", argv[1]))
         __testlib_help();
 
-    if (argc != 6) { // TIOJ format
+    if (argc < 4 || argc > 6) {
         quit(_fail, std::string("Program must be run with the following arguments: ") +
                     std::string("<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]") +
                     "\nUse \"--help\" to get help information");
     }
-    argc = 4;
+
     if (argc == 4) {
         resultName = "";
         appesMode = false;
@@ -4036,6 +4206,9 @@ static inline void __testlib_ensure(bool cond, const char *msg) {
 }
 
 #define ensure(cond) __testlib_ensure(cond, "Condition failed: \"" #cond "\"")
+#define STRINGIZE_DETAIL(x) #x
+#define STRINGIZE(x) STRINGIZE_DETAIL(x)
+#define ensure_ext(cond) __testlib_ensure(cond, "Line " STRINGIZE(__LINE__) ": Condition failed: \"" #cond "\"")
 
 #ifdef __GNUC__
 __attribute__ ((format (printf, 2, 3)))
@@ -4118,7 +4291,7 @@ void srand(unsigned int seed) RAND_THROW_STATEMENT
     quitf(_fail, "Don't use srand(), you should use "
                  "'registerGen(argc, argv, 1);' to initialize generator seed "
                  "by hash code of the command line params. The third parameter "
-                 "is randomGeneratorVersion (currently the latest is 1) [ignored seed=%d].", seed);
+                 "is randomGeneratorVersion (currently the latest is 1) [ignored seed=%u].", seed);
 }
 
 void startTest(int test) {
@@ -4536,7 +4709,7 @@ void println(const A &a, const B &b, const C &c, const D &d, const E &e, const F
 /* opts */
 size_t getOptType(char* s) {
     if (!s || strlen(s) <= 1)
-        return false;
+        return 0;
 
     if (s[0] == '-') {
         if (isalpha(s[1]))
@@ -4615,7 +4788,7 @@ std::string parseExponentialOptValue(const std::string& s) {
     size_t pos = std::string::npos;
     for (size_t i = 0; i < s.length(); i++)
         if (s[i] == 'e' || s[i] == 'E') {
-            if (pos >= 0)
+            if (pos != std::string::npos)
                 __testlib_fail("Opts: expected typical exponential notation but '" + compress(s) + "' found");
             pos = i;
         }
@@ -4736,6 +4909,10 @@ long double optValueToLongDouble(const std::string& s_) {
     return value;
 }
 
+bool has_opt(const std::string key) {
+    return __testlib_opts.count(key) != 0;
+}
+
 template<typename T>
 T opt(std::false_type, int index);
 
@@ -4813,6 +4990,8 @@ T opt(std::true_type, std::true_type, const std::string& key) {
 
 template<>
 bool opt(std::true_type, std::true_type, const std::string& key) {
+    if (!has_opt(key))
+        return false;
     std::string value = __testlib_keyToOpts(key);
     if (value == "true" || value == "1")
         return true;
@@ -4831,4 +5010,3 @@ std::string opt(const std::string key) {
 }
 #endif
 #endif
-
