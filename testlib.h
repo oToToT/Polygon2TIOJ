@@ -1,4 +1,4 @@
-// Modified Testlib: L2649,4048,4137 changed to match TIOJ special judge
+// Modified Testlib: L2649,4136,4137 changed to match TIOJ special judge
 /* 
  * It is strictly recommended to include "testlib.h" before any other include 
  * in your code. In this case testlib overrides compiler specific "random()".
@@ -4045,7 +4045,6 @@ void registerInteraction(int argc, char *argv[]) {
                     std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") +
                     "\nUse \"--help\" to get help information");
     }
-    argc = 4;
     if (argc <= 4) {
         resultName = "";
         appesMode = false;
@@ -4135,6 +4134,7 @@ void feature(const std::string &feature) {
 
 void registerTestlibCmd(int argc, char *argv[]) {
     std::swap(argv[1], argv[2]);
+    argc = 4;
     __testlib_ensuresPreconditions();
 
     testlibMode = _checker;
