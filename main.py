@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
-import tioj
-import problem
+from tioj import *
+from problem import *
 import argparse
 from getpass import getpass
 
